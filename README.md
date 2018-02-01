@@ -1,6 +1,5 @@
-# korean_lunar_calendar_py (한국 양음력 변환)
-
-## Getting Started
+# korean_lunar_calendar_py
+한국 양음력 변환
 
 #### Overview
 Here is a library to convert Korean lunar-calendar to Gregorian calendar.
@@ -17,9 +16,13 @@ This follow the KARI(Korea Astronomy and Space Science Institute)
 Gregorian calendar (1391. 2. 5. ~ 2050. 12. 31) <--> Korean lunar-calendar (1391. 1. 1. ~ 2050. 11. 18)
 ````
 #### Install
+
 pip install korean_lunar_calendar
 
 #### To use
+
+from korean_lunar_calendar import KoreanLunarCalendar
+
 (1) Korean Lunar Date -> Korean Solar Date (음력 -> 양력)
 ```python
 calendar = KoreanLunarCalendar()
