@@ -13,7 +13,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='korean_lunar_calendar',  # Required
-    version='0.1.3',  # Required
+    version='0.1.5',  # Required
     description='Korean Lunar Calendar',  # Required
     long_description=long_description,  # Optional
     packages=find_packages(exclude=["*.tests", "*.tests.*", "tests.*", "tests"]),

@@ -22,9 +22,9 @@ pip install korean_lunar_calendar
 #### To use
 
 (0) import module
-'''python
+```python
 from korean_lunar_calendar import KoreanLunarCalendar
-'''
+```
 
 (1) Korean Solar Date -> Korean Lunar Date (양력 -> 음력)
 ```python
