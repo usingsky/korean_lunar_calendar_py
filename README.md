@@ -57,3 +57,10 @@ print(calendar.getGapJaString())
 # Chinese GapJa String
 print(calendar.getChineseGapJaString())
 ```
+
+```
+[Result]
+1956-03-03
+병신년 경인월 기사일
+丙申年 庚寅月 己巳日
+```
