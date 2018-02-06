@@ -8,12 +8,12 @@ from os import path
 
 here = path.abspath(path.dirname(__file__))
 
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
+with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
     name='korean_lunar_calendar',  # Required
-    version='0.1.5',  # Required
+    version='0.1.6',  # Required
     description='Korean Lunar Calendar',  # Required
     long_description=long_description,  # Optional
     packages=find_packages(exclude=["*.tests", "*.tests.*", "tests.*", "tests"]),
