@@ -1,5 +1,14 @@
 # -*- coding: utf-8 -*-
 
+"""
+KoreanLunarCalendar
+Here is a library to convert Korean lunar-calendar to Gregorian calendar.
+Korean calendar and Chinese calendar is same lunar calendar but have different date.
+This follow the KARI(Korea Astronomy and Space Science Institute)
+@author : usingsky@gmail.com
+"""
+
+import datetime
 class KoreanLunarCalendar :
     KOREAN_LUNAR_MIN_VALUE = 13910101
     KOREAN_LUNAR_MAX_VALUE = 20501118
@@ -7,7 +16,7 @@ class KoreanLunarCalendar :
     KOREAN_SOLAR_MAX_VALUE = 20501231
     
     KOREAN_LUNAR_BASE_YEAR = 1391
-    SOLAR_LUNAR_DAY_DIFF = 357
+    SOLAR_LUNAR_DAY_DIFF = 35
     
     LUNAR_SMALL_MONTH_DAY = 29
     LUNAR_BIG_MONTH_DAY = 30
@@ -18,6 +27,12 @@ class KoreanLunarCalendar :
     KOREAN_CHEONGAN = [0xac11, 0xc744, 0xbcd1, 0xc815, 0xbb34, 0xae30, 0xacbd, 0xc2e0, 0xc784, 0xacc4]
     KOREAN_GANJI = [0xc790, 0xcd95, 0xc778, 0xbb18, 0xc9c4, 0xc0ac, 0xc624, 0xbbf8, 0xc2e0, 0xc720, 0xc220, 0xd574]
     KOREAN_GAPJA_UNIT = [0xb144, 0xc6d4, 0xc77c]
+
+    CHINESE_CHEONGAN = [0x7532, 0x4e59, 0x4e19, 0x4e01, 0x620a, 0x5df1, 0x5e9a, 0x8f9b, 0x58ec, 0x7678]
+    CHINESE_GANJI = [0x5b50, 0x4e11, 0x5bc5, 0x536f, 0x8fb0, 0x5df3, 0x5348, 0x672a, 0x7533, 0x9149, 0x620c, 0x4ea5]
+    CHINESE_GAPJA_UNIT = [0x5e74, 0x6708, 0x65e5]
+
+    INTERCALATION_STR = [0xc724, 0x958f]
 
     KOREAN_LUNAR_DATA = [
             0x82c40653, 0xc301c6a9, 0x82c405aa, 0x82c60ab5, 0x830092bd, 0xc2c402b6, 0x82c60c37, 0x82fe552e, 0x82c40c96, 0xc2c60e4b, 
@@ -97,11 +112,25 @@ class KoreanLunarCalendar :
         self.solarMonth = 0
         self.solarDay = 0
 
+        self.__gapjaYearInx = [0, 0, 0]
+        self.__gapjaMonthInx = [0, 0, 1]
+        self.__gapjaDayInx = [0, 0, 2]
+
+
+    def LunarIsoFormat(self):
+        dateStr = "%04d-%02d-%02d" % (self.lunarYear, self.lunarMonth, self.lunarDay)
+        if self.isIntercalation :
+            dateStr += " Intercalation"
+        return dateStr
+
+    def SolarIsoFormat(self):
+        return "%04d-%02d-%02d" % (self.solarYear, self.solarMonth, self.solarDay)
+
     def __getLunarData(self, year):
         return self.KOREAN_LUNAR_DATA[year - self.KOREAN_LUNAR_BASE_YEAR]
 
     def __getLunarIntercalationMonth(self, lunarData):
-        return (lunarData >> 12) & 0x000F;
+        return (lunarData >> 12) & 0x000F
 
     def __getLunarDays(self, year, month=None, isIntercalation=None):
         lunarData = self.__getLunarData(year)
@@ -112,7 +141,7 @@ class KoreanLunarCalendar :
             else:
                 days = self.LUNAR_BIG_MONTH_DAY if ((lunarData >> (12 - month)) & 0x01) > 0 else self.LUNAR_SMALL_MONTH_DAY
         else:
-            days = (lunarData >> 17) & 0x01FF;    
+            days = (lunarData >> 17) & 0x01FF
         return days
 
     def __getLunarDaysBeforeBaseYear(self, year):
@@ -131,7 +160,7 @@ class KoreanLunarCalendar :
                 intercalationMonth = self.__getLunarIntercalationMonth(self.__getLunarData(year))
                 if (intercalationMonth > 0) and intercalationMonth < month+1:
                     days += self.__getLunarDays(year, intercalationMonth, True)
-        return days;
+        return days
 
     def __getLunarAbsDays(self, year, month, day, isIntercalation):
         days = self.__getLunarDaysBeforeBaseYear(year-1) + self.__getLunarDaysBeforeBaseMonth(year, month-1, True) + day
@@ -205,7 +234,7 @@ class KoreanLunarCalendar :
             if absDays >= absDaysByMonth:
                 lunarMonth = month
                 if self.__getLunarIntercalationMonth(self.__getLunarData(lunarYear)) == month :
-                    isIntercalation = absDays >= self.__getLunarAbsDays(lunarYear, month, 1, True);
+                    isIntercalation = absDays >= self.__getLunarAbsDays(lunarYear, month, 1, True)
                 
                 lunarDay = absDays - self.__getLunarAbsDays(lunarYear, lunarMonth, 1, isIntercalation) + 1
                 break
@@ -242,7 +271,7 @@ class KoreanLunarCalendar :
             self.lunarYear = lunarYear
             self.lunarMonth = lunarMonth
             self.lunarDay = lunarDay
-            self.isIntercalation = isIntercalation and (__getLunarIntercalationMonth(__getLunarIntercalationMonth(__getLunarData(lunarYear)) == lunarMonth))
+            self.isIntercalation = isIntercalation and (self.__getLunarIntercalationMonth(self.__getLunarData(lunarYear)) == lunarMonth)
             self.__setSolarDateByLunarDate(lunarYear, lunarMonth, lunarDay, isIntercalation)
             isValid = True
         return isValid
@@ -257,21 +286,37 @@ class KoreanLunarCalendar :
             isValid = True
         return isValid
 
-    def __getGapJa(self, cheonganInx, ganjiInx, unitInx):
-        return chr(self.KOREAN_CHEONGAN[cheonganInx]) + chr(self.KOREAN_GANJI[ganjiInx]) + chr(self.KOREAN_GAPJA_UNIT[unitInx])
-
-    def getGapJaString(self) :
-        gapjaString = ''
+    def __getGapJa(self):
         absDays = self.__getLunarAbsDays(self.lunarYear, self.lunarMonth, self.lunarDay, self.isIntercalation)
         if absDays > 0 :
-            gapjaString += self.__getGapJa(((self.lunarYear+7) - self.KOREAN_LUNAR_BASE_YEAR) % len(self.KOREAN_CHEONGAN),
-                    (((self.lunarYear+7) - self.KOREAN_LUNAR_BASE_YEAR) % len(self.KOREAN_GANJI)), 0) + " "
+            self.__gapjaYearInx[0] = ((self.lunarYear+7) - self.KOREAN_LUNAR_BASE_YEAR) % len(self.KOREAN_CHEONGAN)
+            self.__gapjaYearInx[1] = (((self.lunarYear+7) - self.KOREAN_LUNAR_BASE_YEAR) % len(self.KOREAN_GANJI))
             
-            if self.isIntercalation == False :
-                monthCount = self.lunarMonth
-                for baseYear in range(self.KOREAN_LUNAR_BASE_YEAR, self.lunarYear) :
-                    monthCount += 12
-                gapjaString += self.__getGapJa((monthCount+5) % len(self.KOREAN_CHEONGAN), (monthCount+1) % len(self.KOREAN_GANJI), 1) + ' '
+            monthCount = self.lunarMonth
+            monthCount += 12 * (self.lunarYear - self.KOREAN_LUNAR_BASE_YEAR)
+            self.__gapjaMonthInx[0] = (monthCount+5) % len(self.KOREAN_CHEONGAN)
+            self.__gapjaMonthInx[1] = (monthCount+1) % len(self.KOREAN_GANJI)
             
-            gapjaString += self.__getGapJa((absDays+4) % len(self.KOREAN_CHEONGAN), absDays % len(self.KOREAN_GANJI), 2)
-        return gapjaString
+            self.__gapjaDayInx[0] = (absDays+4) % len(self.KOREAN_CHEONGAN)
+            self.__gapjaDayInx[1] = absDays % len(self.KOREAN_GANJI)
+
+    def getGapJaString(self) :
+        self.__getGapJa()
+        gapjaStr = "%c%c%c %c%c%c %c%c%c" % (chr(self.KOREAN_CHEONGAN[self.__gapjaYearInx[0]]), chr(self.KOREAN_GANJI[self.__gapjaYearInx[1]]), chr(self.KOREAN_GAPJA_UNIT[self.__gapjaYearInx[2]]),
+        chr(self.KOREAN_CHEONGAN[self.__gapjaMonthInx[0]]), chr(self.KOREAN_GANJI[self.__gapjaMonthInx[1]]), chr(self.KOREAN_GAPJA_UNIT[self.__gapjaMonthInx[2]]),
+        chr(self.KOREAN_CHEONGAN[self.__gapjaDayInx[0]]), chr(self.KOREAN_GANJI[self.__gapjaDayInx[1]]), chr(self.KOREAN_GAPJA_UNIT[self.__gapjaDayInx[2]]))
+
+        if self.isIntercalation == True :
+            gapjaStr += " (%c%c)" % (chr(self.INTERCALATION_STR[0]), chr(self.KOREAN_GAPJA_UNIT[1]))
+        return gapjaStr
+        
+    
+    def getChineseGapJaString(self) :
+        self.__getGapJa()
+        gapjaStr = "%c%c%c %c%c%c %c%c%c" % (chr(self.CHINESE_CHEONGAN[self.__gapjaYearInx[0]]), chr(self.CHINESE_GANJI[self.__gapjaYearInx[1]]), chr(self.CHINESE_GAPJA_UNIT[self.__gapjaYearInx[2]]),
+        chr(self.CHINESE_CHEONGAN[self.__gapjaMonthInx[0]]), chr(self.CHINESE_GANJI[self.__gapjaMonthInx[1]]), chr(self.CHINESE_GAPJA_UNIT[self.__gapjaMonthInx[2]]),
+        chr(self.CHINESE_CHEONGAN[self.__gapjaDayInx[0]]), chr(self.CHINESE_GANJI[self.__gapjaDayInx[1]]), chr(self.CHINESE_GAPJA_UNIT[self.__gapjaDayInx[2]]))
+
+        if self.isIntercalation == True :
+            gapjaStr += " (%c%c)" % (chr(self.INTERCALATION_STR[1]), chr(self.CHINESE_GAPJA_UNIT[1]))
+        return gapjaStr
