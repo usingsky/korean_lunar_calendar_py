@@ -21,34 +21,39 @@ pip install korean_lunar_calendar
 
 #### To use
 
+(0) import module
+'''python
 from korean_lunar_calendar import KoreanLunarCalendar
+'''
 
-(1) Korean Lunar Date -> Korean Solar Date (음력 -> 양력)
+(1) Korean Solar Date -> Korean Lunar Date (양력 -> 음력)
 ```python
 calendar = KoreanLunarCalendar()
-# year(년), month(월), day(일),
-calendar.setSolarDate(1392, 2, 23);
+# params : year(년), month(월), day(일)
+calendar.setSolarDate(2017, 6, 24)
+# Lunar Date (ISO Format)
+print(calendar.LunarIsoFormat())
+# Korean GapJa String
+print(calendar.getGapJaString())
+# Chinese GapJa String
+print(calendar.getChineseGapJaString())
 ```
 
 ```
-=> 1391. 3. 3.
+[Result]
+2017-05-01 Intercalation
+정유년 병오월 임오일 (윤월)
+丁酉年 丙午月 壬午日 (閏月)
 ```
-(2) Korean Solar Date -> Korean Lunar Date (양력 -> 음력)
+
+(2) Korean Lunar Date -> Korean Solar Date (음력 -> 양력)
 ```python
-calendar = KoreanLunarCalendar()
-# year(년), month(월), day(일), intercalation(윤달여부)
-calendar.setLunarDate(2018, 1, 21, False); 
-```
-
-```
-=> 2019. 1. 24.
-```
-
-(3) Getting Korean GapJa String (음력간지)
-```python
-calendar.getGapJaString()
-```
-
-```
-무술년 갑인월 기해일
+# params : year(년), month(월), day(일), intercalation(윤달여부)
+calendar.setLunarDate(1956, 1, 21, False)
+# Solar Date (ISO Format)
+print(calendar.SolarIsoFormat())
+# Korean GapJa String
+print(calendar.getGapJaString())
+# Chinese GapJa String
+print(calendar.getChineseGapJaString())
 ```
