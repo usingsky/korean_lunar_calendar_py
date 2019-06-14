@@ -9,7 +9,7 @@ This follow the KARI(Korea Astronomy and Space Science Institute)
 """
 
 import datetime
-class KoreanLunarCalendar :
+class KoreanLunarCalendar(object) :
     KOREAN_LUNAR_MIN_VALUE = 13910101
     KOREAN_LUNAR_MAX_VALUE = 20501118
     KOREAN_SOLAR_MIN_VALUE = 13910205
@@ -257,8 +257,8 @@ class KoreanLunarCalendar :
                 if isLunar == False and year == 1582 and month == 10 :
                     if day > 4 and day < 15 :
                         return isValid
-                else:
-                    dayLimit += 10
+                    else:
+                        dayLimit += 10
 
                 if day <= dayLimit :
                     isValid = True
