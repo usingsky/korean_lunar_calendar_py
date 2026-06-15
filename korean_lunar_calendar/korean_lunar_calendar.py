@@ -9,6 +9,7 @@ This follow the KARI(Korea Astronomy and Space Science Institute)
 """
 
 import datetime
+import numbers
 class KoreanLunarCalendar(object) :
     KOREAN_LUNAR_MIN_VALUE = 10000101
     KOREAN_LUNAR_MAX_VALUE = 20501118
@@ -33,6 +34,15 @@ class KoreanLunarCalendar(object) :
     CHINESE_GAPJA_UNIT = [0x5e74, 0x6708, 0x65e5]
 
     INTERCALATION_STR = [0xc724, 0x958f]
+
+    # Offsets that anchor the sexagenary cycle to the base year (1000): the
+    # cheongan (10) and ganji (12) wheels each start at a fixed position.
+    GAPJA_YEAR_CHEONGAN_OFFSET = 6
+    GAPJA_YEAR_GANJI_OFFSET = 0
+    GAPJA_MONTH_CHEONGAN_OFFSET = 3
+    GAPJA_MONTH_GANJI_OFFSET = 1
+    GAPJA_DAY_CHEONGAN_OFFSET = 4
+    GAPJA_DAY_GANJI_OFFSET = 2
 
     KOREAN_LUNAR_DATA = [
             0x82c60a57, 0x82fec52b, 0x82c40d2a, 0x82c60d55, 0xc30095ad, 0x82c4056a, 0x82c6096d, 0x830054dd, 0xc2c404ad, 0x82c40a4d,
@@ -152,9 +162,14 @@ class KoreanLunarCalendar(object) :
         self.solarMonth = 0
         self.solarDay = 0
 
-        self.__gapjaYearInx = [0, 0, 0]
-        self.__gapjaMonthInx = [0, 0, 1]
-        self.__gapjaDayInx = [0, 0, 2]
+        # Memoized cumulative day counts from the base year, so the repeated
+        # lookups inside the month-search loops don't re-sum ~1000 years.
+        self.__cumulativeLunarDays = {}
+        self.__cumulativeSolarDays = {}
+
+        # Default to today's solar date until an explicit date is set.
+        today = datetime.date.today()
+        self.setSolarDate(today.year, today.month, today.day)
 
 
     def LunarIsoFormat(self):
@@ -184,11 +199,23 @@ class KoreanLunarCalendar(object) :
             days = (lunarData >> 17) & 0x01FF
         return days
 
-    def __getLunarDaysBeforeBaseYear(self, year):
-        days = 0
-        for baseYear in range(self.KOREAN_LUNAR_BASE_YEAR, year+1):
-            days += self.__getLunarDays(baseYear)
+    def __accumulateYearDays(self, year, cache, perYearFn):
+        # Sum of per-year day counts from the base year through `year`, memoized.
+        # Extends the previous year's cached sum when available (amortized O(1)),
+        # otherwise sums from the base year once and caches the total.
+        if year in cache:
+            return cache[year]
+        if (year - 1) in cache and year > self.KOREAN_LUNAR_BASE_YEAR:
+            days = cache[year - 1] + perYearFn(year)
+        else:
+            days = 0
+            for baseYear in range(self.KOREAN_LUNAR_BASE_YEAR, year+1):
+                days += perYearFn(baseYear)
+        cache[year] = days
         return days
+
+    def __getLunarDaysBeforeBaseYear(self, year):
+        return self.__accumulateYearDays(year, self.__cumulativeLunarDays, lambda y: self.__getLunarDays(y))
 
     def __getLunarDaysBeforeBaseMonth(self, year, month, isIntercalation):
         days = 0
@@ -220,10 +247,7 @@ class KoreanLunarCalendar(object) :
         return days
 
     def __getSolarDaysBeforeBaseYear(self, year):
-        days = 0
-        for baseYear in range(self.KOREAN_LUNAR_BASE_YEAR, year+1):
-            days += self.__getSolarDays(baseYear)
-        return days
+        return self.__accumulateYearDays(year, self.__cumulativeSolarDays, lambda y: self.__getSolarDays(y))
 
     def __getSolarDaysBeforeBaseMonth(self, year, month):
         days = 0
@@ -279,6 +303,9 @@ class KoreanLunarCalendar(object) :
 
     def __checkValidDate(self, isLunar, isIntercalation, year, month, day):
         isValid = False
+        # Reject non-integer inputs before they corrupt the bitfield/index math.
+        if not all(isinstance(value, numbers.Integral) for value in (year, month, day)):
+            return isValid
         dateValue = year*10000 + month*100 + day
         #1582. 10. 5 ~ 1582. 10. 14 is not valid
         minValue = self.KOREAN_LUNAR_MIN_VALUE if isLunar else self.KOREAN_SOLAR_MIN_VALUE
@@ -286,17 +313,20 @@ class KoreanLunarCalendar(object) :
 
         if minValue <= dateValue and maxValue >= dateValue :
             if month > 0 and month < 13 and day > 0 :
+                # A leap-month request is only valid when this year's actual
+                # intercalation month matches the requested month.
+                if isLunar and isIntercalation and (self.__getLunarIntercalationMonth(self.__getLunarData(year)) != month) :
+                    return isValid
                 dayLimit = self.__getLunarDays(year, month, isIntercalation) if isLunar else self.__getSolarDays(year, month)
-                if isLunar == False and year == 1582 and month == 10 :
-                    if day > 4 and day < 15 :
-                        return isValid
-                    else:
-                        dayLimit += 10
+                # 1582.10.5 ~ 1582.10.14 were skipped by the Gregorian reform; the
+                # month still ends at day 31, so only those 10 days are rejected.
+                if isLunar == False and year == 1582 and month == 10 and day > 4 and day < 15 :
+                    return isValid
 
                 if day <= dayLimit :
                     isValid = True
 
-        return isValid                
+        return isValid
 
     def setLunarDate(self, lunarYear, lunarMonth, lunarDay, isIntercalation) :
         isValid = False
@@ -320,35 +350,43 @@ class KoreanLunarCalendar(object) :
         return isValid
 
     def __getGapJa(self):
+        # Sexagenary-cycle indices for the current lunar date as
+        # ((yearCheongan, yearGanji), (monthCheongan, monthGanji), (dayCheongan, dayGanji)).
+        # Pure: returns a fresh tuple instead of mutating instance state. When no
+        # valid date is set (absDays <= 0) it returns the zero indices, preserving
+        # the historical default for an unset converter.
         absDays = self.__getLunarAbsDays(self.lunarYear, self.lunarMonth, self.lunarDay, self.isIntercalation)
-        if absDays > 0 :
-            self.__gapjaYearInx[0] = ((self.lunarYear + 6) - self.KOREAN_LUNAR_BASE_YEAR) % len(self.KOREAN_CHEONGAN)
-            self.__gapjaYearInx[1] = ((self.lunarYear + 0) - self.KOREAN_LUNAR_BASE_YEAR) % len(self.KOREAN_GANJI)
-            
-            monthCount = self.lunarMonth
-            monthCount += 12 * (self.lunarYear - self.KOREAN_LUNAR_BASE_YEAR)
-            self.__gapjaMonthInx[0] = (monthCount + 3) % len(self.KOREAN_CHEONGAN)
-            self.__gapjaMonthInx[1] = (monthCount + 1) % len(self.KOREAN_GANJI)
-            
-            self.__gapjaDayInx[0] = (absDays + 4) % len(self.KOREAN_CHEONGAN)
-            self.__gapjaDayInx[1] = (absDays + 2) % len(self.KOREAN_GANJI)
+        if absDays <= 0 :
+            return ((0, 0), (0, 0), (0, 0))
+
+        cheonganLen = len(self.KOREAN_CHEONGAN)
+        ganjiLen = len(self.KOREAN_GANJI)
+        monthCount = self.lunarMonth + 12 * (self.lunarYear - self.KOREAN_LUNAR_BASE_YEAR)
+
+        yearInx = (((self.lunarYear + self.GAPJA_YEAR_CHEONGAN_OFFSET) - self.KOREAN_LUNAR_BASE_YEAR) % cheonganLen,
+                   ((self.lunarYear + self.GAPJA_YEAR_GANJI_OFFSET) - self.KOREAN_LUNAR_BASE_YEAR) % ganjiLen)
+        monthInx = ((monthCount + self.GAPJA_MONTH_CHEONGAN_OFFSET) % cheonganLen,
+                    (monthCount + self.GAPJA_MONTH_GANJI_OFFSET) % ganjiLen)
+        dayInx = ((absDays + self.GAPJA_DAY_CHEONGAN_OFFSET) % cheonganLen,
+                  (absDays + self.GAPJA_DAY_GANJI_OFFSET) % ganjiLen)
+        return (yearInx, monthInx, dayInx)
 
     def getGapJaString(self) :
-        self.__getGapJa()
-        gapjaStr = "%c%c%c %c%c%c %c%c%c" % (chr(self.KOREAN_CHEONGAN[self.__gapjaYearInx[0]]), chr(self.KOREAN_GANJI[self.__gapjaYearInx[1]]), chr(self.KOREAN_GAPJA_UNIT[self.__gapjaYearInx[2]]),
-        chr(self.KOREAN_CHEONGAN[self.__gapjaMonthInx[0]]), chr(self.KOREAN_GANJI[self.__gapjaMonthInx[1]]), chr(self.KOREAN_GAPJA_UNIT[self.__gapjaMonthInx[2]]),
-        chr(self.KOREAN_CHEONGAN[self.__gapjaDayInx[0]]), chr(self.KOREAN_GANJI[self.__gapjaDayInx[1]]), chr(self.KOREAN_GAPJA_UNIT[self.__gapjaDayInx[2]]))
+        (yearInx, monthInx, dayInx) = self.__getGapJa()
+        gapjaStr = "%c%c%c %c%c%c %c%c%c" % (chr(self.KOREAN_CHEONGAN[yearInx[0]]), chr(self.KOREAN_GANJI[yearInx[1]]), chr(self.KOREAN_GAPJA_UNIT[0]),
+        chr(self.KOREAN_CHEONGAN[monthInx[0]]), chr(self.KOREAN_GANJI[monthInx[1]]), chr(self.KOREAN_GAPJA_UNIT[1]),
+        chr(self.KOREAN_CHEONGAN[dayInx[0]]), chr(self.KOREAN_GANJI[dayInx[1]]), chr(self.KOREAN_GAPJA_UNIT[2]))
 
         if self.isIntercalation == True :
             gapjaStr += " (%c%c)" % (chr(self.INTERCALATION_STR[0]), chr(self.KOREAN_GAPJA_UNIT[1]))
         return gapjaStr
-        
-    
+
+
     def getChineseGapJaString(self) :
-        self.__getGapJa()
-        gapjaStr = "%c%c%c %c%c%c %c%c%c" % (chr(self.CHINESE_CHEONGAN[self.__gapjaYearInx[0]]), chr(self.CHINESE_GANJI[self.__gapjaYearInx[1]]), chr(self.CHINESE_GAPJA_UNIT[self.__gapjaYearInx[2]]),
-        chr(self.CHINESE_CHEONGAN[self.__gapjaMonthInx[0]]), chr(self.CHINESE_GANJI[self.__gapjaMonthInx[1]]), chr(self.CHINESE_GAPJA_UNIT[self.__gapjaMonthInx[2]]),
-        chr(self.CHINESE_CHEONGAN[self.__gapjaDayInx[0]]), chr(self.CHINESE_GANJI[self.__gapjaDayInx[1]]), chr(self.CHINESE_GAPJA_UNIT[self.__gapjaDayInx[2]]))
+        (yearInx, monthInx, dayInx) = self.__getGapJa()
+        gapjaStr = "%c%c%c %c%c%c %c%c%c" % (chr(self.CHINESE_CHEONGAN[yearInx[0]]), chr(self.CHINESE_GANJI[yearInx[1]]), chr(self.CHINESE_GAPJA_UNIT[0]),
+        chr(self.CHINESE_CHEONGAN[monthInx[0]]), chr(self.CHINESE_GANJI[monthInx[1]]), chr(self.CHINESE_GAPJA_UNIT[1]),
+        chr(self.CHINESE_CHEONGAN[dayInx[0]]), chr(self.CHINESE_GANJI[dayInx[1]]), chr(self.CHINESE_GAPJA_UNIT[2]))
 
         if self.isIntercalation == True :
             gapjaStr += " (%c%c)" % (chr(self.INTERCALATION_STR[1]), chr(self.CHINESE_GAPJA_UNIT[1]))

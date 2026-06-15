@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "korean_lunar_calendar"
+dynamic = ["version"]
+description = "Convert the Korean lunar calendar to/from the Gregorian solar calendar (KARI standard)."
+readme = "README.md"
+requires-python = ">=3.6"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Jinil Lee", email = "usingsky@gmail.com" }]
+maintainers = [{ name = "Jinil Lee", email = "usingsky@gmail.com" }]
+keywords = ["calendar", "korean", "lunar", "solar", "음력", "양력", "달력"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/usingsky/korean_lunar_calendar_py"
+Repository = "https://github.com/usingsky/korean_lunar_calendar_py"
+Issues = "https://github.com/usingsky/korean_lunar_calendar_py/issues"
+
+[tool.setuptools]
+packages = ["korean_lunar_calendar"]
+
+[tool.setuptools.dynamic]
+version = { attr = "korean_lunar_calendar.__version__" }
